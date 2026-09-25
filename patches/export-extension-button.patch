@@ -1,0 +1,97 @@
+*** /dev/null
+--- b/src/components/ExportExtensionButton.tsx
+***************
+*** 0 ****
+--- 1,320 ----
++ import React, { useState } from 'react';
++ import { Download, Chrome, FileCode, Check, Copy, Code2, FolderArchive, HelpCircle, X, Sparkles, Layers } from 'lucide-react';
++ import JSZip from 'jszip';
++ 
++ export interface ExportExtensionButtonProps {
++   label?: string;
++   variant?: 'primary' | 'gradient' | 'outline' | 'compact' | 'subtle';
++   className?: string;
++   apiEndpoint?: string;
++   extensionName?: string;
++   onExportSuccess?: (filename: string) => void;
++ }
++ 
++ export function ExportExtensionButton({
++   label = 'Export Extension',
++   variant = 'gradient',
++   className = '',
++   apiEndpoint = '/api/download-extension-zip',
++   extensionName = 'SuperJobGenie',
++   onExportSuccess
++ }: ExportExtensionButtonProps) {
++   const [isModalOpen, setIsModalOpen] = useState(false);
++   const [isDownloading, setIsDownloading] = useState(false);
++   const [activeTab, setActiveTab] = useState<'download' | 'inspect' | 'guide' | 'patch'>('download');
++   const [copiedKey, setCopiedKey] = useState<string | null>(null);
++ 
++   const executeDownload = async () => {
++     setIsDownloading(true);
++     const filename = `${extensionName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-extension.zip`;
++     try {
++       let blob: Blob | null = null;
++       if (apiEndpoint) {
++         try {
++           const res = await fetch(apiEndpoint);
++           if (res.ok && res.headers.get('content-type')?.includes('zip')) {
++             blob = await res.blob();
++           }
++         } catch {}
++       }
++       if (!blob) {
++         const zip = new JSZip();
++         zip.file('manifest.json', JSON.stringify({
++           manifest_version: 3,
++           name: `${extensionName} - Career AI Assistant`,
++           version: '2.2.0',
++           permissions: ['storage', 'activeTab', 'scripting'],
++           host_permissions: ['https://*.indeed.com/*', 'https://*.linkedin.com/*', '*://*/*'],
++           action: { default_popup: 'popup.html' },
++           content_scripts: [{ matches: ['https://*.indeed.com/*'], js: ['content.js'], css: ['styles.css'] }]
++         }, null, 2));
++         zip.file('content.js', `console.log('[${extensionName}] Content Script Loaded');`);
++         zip.file('styles.css', `.sjg-pill { position: fixed; bottom: 20px; right: 20px; z-index: 999999; }`);
++         zip.file('popup.html', `<!DOCTYPE html><html><body><h3>${extensionName}</h3></body></html>`);
++         zip.file('README.md', `# ${extensionName} Extension\\nLoad unpacked in chrome://extensions`);
++         blob = await zip.generateAsync({ type: 'blob' });
++       }
++       const downloadUrl = window.URL.createObjectURL(blob);
++       const a = document.createElement('a');
++       a.href = downloadUrl;
++       a.download = filename;
++       document.body.appendChild(a);
++       a.click();
++       window.URL.revokeObjectURL(downloadUrl);
++       document.body.removeChild(a);
++       onExportSuccess?.(filename);
++     } catch (err) {
++       console.error(err);
++     } finally {
++       setIsDownloading(false);
++     }
++   };
++ 
++   return (
++     <div className={`inline-flex items-center rounded-lg ${className}`}>
++       <button
++         onClick={executeDownload}
++         disabled={isDownloading}
++         className="flex items-center gap-2 px-3 py-1.5 rounded-l-lg font-bold text-xs bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md cursor-pointer disabled:opacity-50"
++       >
++         <Download className="w-3.5 h-3.5 text-cyan-300" />
++         <span>{isDownloading ? 'Packaging...' : label}</span>
++       </button>
++       <button
++         onClick={() => setIsModalOpen(true)}
++         className="px-2 py-1.5 rounded-r-lg border-l border-white/20 bg-purple-700 hover:bg-purple-600 text-white text-xs cursor-pointer"
++         title="Inspect Extension & Patch"
++       >
++         <Code2 className="w-3.5 h-3.5" />
++       </button>
++     </div>
++   );
++ }
